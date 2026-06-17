@@ -167,15 +167,36 @@ function selectBedrockMantleLanguageModel(sdk: BundledSDK, modelID: string) {
 
 function custom(dep: CustomDep): Record<string, CustomLoader> {
   return {
-    anthropic: () =>
-      Effect.succeed({
+    anthropic: Effect.fnUntraced(function* () {
+      const betaHeaders = {
+        "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
+      }
+      const claudeCredsPath = path.join(os.homedir(), ".claude", ".credentials.json")
+      const content = yield* Effect.tryPromise(() => Bun.file(claudeCredsPath).text()).pipe(Effect.orElseSucceed(() => ""))
+      if (content) {
+        const parsed = yield* Effect.try(() => JSON.parse(content) as { claudeAiOauth?: { accessToken?: string } }).pipe(Effect.orElseSucceed(() => ({})))
+        const token = parsed.claudeAiOauth?.accessToken
+        if (token) {
+          return {
+            autoload: true,
+            options: {
+              apiKey: "claude-code-oauth",
+              headers: betaHeaders,
+              fetch: async (input: unknown, init?: RequestInit) => {
+                const headers = new Headers((init?.headers as HeadersInit | undefined) ?? {})
+                headers.delete("x-api-key")
+                headers.set("authorization", `Bearer ${token}`)
+                return fetch(input as RequestInfo, { ...init, headers })
+              },
+            },
+          }
+        }
+      }
+      return {
         autoload: false,
-        options: {
-          headers: {
-            "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
-          },
-        },
-      }),
+        options: { headers: betaHeaders },
+      }
+    }),
     opencode: Effect.fnUntraced(function* (input: Info) {
       const env = yield* dep.env()
       const hasKey = iife(() => {

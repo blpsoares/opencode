@@ -171,25 +171,26 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
       const betaHeaders = {
         "anthropic-beta": "interleaved-thinking-2025-05-14,fine-grained-tool-streaming-2025-05-14",
       }
-      const claudeCredsPath = path.join(os.homedir(), ".claude", ".credentials.json")
-      const content = yield* Effect.tryPromise(() => Bun.file(claudeCredsPath).text()).pipe(Effect.orElseSucceed(() => ""))
-      if (content) {
-        const parsed = yield* Effect.try(() => JSON.parse(content) as { claudeAiOauth?: { accessToken?: string } }).pipe(Effect.orElseSucceed(() => ({})))
-        const token = parsed.claudeAiOauth?.accessToken
-        if (token) {
-          return {
-            autoload: true,
-            options: {
-              apiKey: "claude-code-oauth",
-              headers: betaHeaders,
-              fetch: async (input: unknown, init?: RequestInit) => {
-                const headers = new Headers((init?.headers as HeadersInit | undefined) ?? {})
-                headers.delete("x-api-key")
-                headers.set("authorization", `Bearer ${token}`)
-                return fetch(input as RequestInfo, { ...init, headers })
-              },
+      const token = yield* Effect.tryPromise(async () => {
+        const { readFile } = await import("fs/promises")
+        const claudeCredsPath = path.join(os.homedir(), ".claude", ".credentials.json")
+        const content = await readFile(claudeCredsPath, "utf-8")
+        const parsed = JSON.parse(content) as { claudeAiOauth?: { accessToken?: string } }
+        return parsed.claudeAiOauth?.accessToken ?? null
+      }).pipe(Effect.orElseSucceed(() => null))
+      if (token) {
+        return {
+          autoload: true,
+          options: {
+            apiKey: "claude-code-oauth",
+            headers: betaHeaders,
+            fetch: async (input: unknown, init?: RequestInit) => {
+              const headers = new Headers((init?.headers as HeadersInit | undefined) ?? {})
+              headers.delete("x-api-key")
+              headers.set("authorization", `Bearer ${token}`)
+              return fetch(input as RequestInfo, { ...init, headers })
             },
-          }
+          },
         }
       }
       return {

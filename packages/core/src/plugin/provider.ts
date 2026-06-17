@@ -30,6 +30,7 @@ import { VercelPlugin } from "./provider/vercel"
 import { VenicePlugin } from "./provider/venice"
 import { XAIPlugin } from "./provider/xai"
 import { ZenmuxPlugin } from "./provider/zenmux"
+import { ClaudeCodeAuthPlugin } from "./provider/claude-code-auth"
 
 export const ProviderPlugins = [
   AlibabaPlugin,
@@ -65,5 +66,6 @@ export const ProviderPlugins = [
   VenicePlugin,
   XAIPlugin,
   ZenmuxPlugin,
+  ClaudeCodeAuthPlugin,
   DynamicProviderPlugin,
 ]

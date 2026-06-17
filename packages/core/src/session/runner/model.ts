@@ -5,6 +5,7 @@ import * as AnthropicMessages from "@opencode-ai/llm/protocols/anthropic-message
 import * as OpenAICompatibleChat from "@opencode-ai/llm/protocols/openai-compatible-chat"
 import * as OpenAIResponses from "@opencode-ai/llm/protocols/openai-responses"
 import { Auth, type AnyRoute } from "@opencode-ai/llm/route"
+import { CLAUDE_CODE_OAUTH_ENV } from "../plugin/provider/claude-code-auth"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { produce } from "immer"
 import { Catalog } from "../../catalog"
@@ -106,9 +107,15 @@ export const fromCatalogModel = (
     )
   }
   if (resolved.api.type === "aisdk" && resolved.api.package === "@ai-sdk/anthropic") {
+    const auth =
+      key === undefined
+        ? Auth.none
+        : connection?.type === "env" && connection.name === CLAUDE_CODE_OAUTH_ENV
+          ? Auth.bearer(key)
+          : Auth.header("x-api-key", key)
     return Effect.succeed(
       withDefaults(resolved, AnthropicMessages.route)
-        .with({ auth: key === undefined ? Auth.none : Auth.header("x-api-key", key) })
+        .with({ auth })
         .model({ id: resolved.api.id }),
     )
   }

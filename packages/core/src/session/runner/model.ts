@@ -5,7 +5,7 @@ import * as AnthropicMessages from "@opencode-ai/llm/protocols/anthropic-message
 import * as OpenAICompatibleChat from "@opencode-ai/llm/protocols/openai-compatible-chat"
 import * as OpenAIResponses from "@opencode-ai/llm/protocols/openai-responses"
 import { Auth, type AnyRoute } from "@opencode-ai/llm/route"
-import { CLAUDE_CODE_OAUTH_ENV } from "../plugin/provider/claude-code-auth"
+import { CLAUDE_CODE_OAUTH_ENV } from "../../plugin/provider/claude-code-auth"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { produce } from "immer"
 import { Catalog } from "../../catalog"

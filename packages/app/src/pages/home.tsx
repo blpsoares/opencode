@@ -13,6 +13,7 @@ import { Icon as IconV2 } from "@opencode-ai/ui/v2/icon"
 import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { getProjectAvatarVariant, useLayout, type LocalProject } from "@/context/layout"
+import type { State } from "@/context/global-sync/child-store"
 import { useNavigate } from "@solidjs/router"
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { Icon } from "@opencode-ai/ui/icon"
@@ -47,6 +48,7 @@ import { useSettings } from "@/context/settings"
 import { ServerRowMenu } from "@/components/server/server-row-menu"
 import { ServerHealthIndicator } from "@/components/server/server-row"
 import { type ServerHealth } from "@/utils/server-health"
+import { SessionPendingRequestActions } from "@/components/session-request-actions"
 
 const HOME_SESSION_LIMIT = 64
 const HOME_ROW_LAYOUT =
@@ -105,8 +107,36 @@ function buildHomeSessionRecords(input: {
     })
 }
 
-function matchesHomeSessionSearch(record: HomeSessionRecord, query: string) {
-  return `${record.session.title} ${record.projectName}`.toLowerCase().includes(query)
+function matchesHomeSessionSearch(record: HomeSessionRecord, store: State | undefined, query: string) {
+  if (record.session.title?.toLowerCase().includes(query)) return true
+  if (record.projectName?.toLowerCase().includes(query)) return true
+  if (record.session.id.toLowerCase().includes(query)) return true
+  if (record.session.slug?.toLowerCase().includes(query)) return true
+
+  if (!store) return false
+
+  const messages = store.message[record.session.id]
+  if (!messages || messages.length === 0) return false
+
+  for (const msg of messages) {
+    const m = msg as any
+    if (m.summary?.title?.toLowerCase().includes(query)) return true
+    if (m.summary?.body?.toLowerCase().includes(query)) return true
+    if (m.system?.toLowerCase().includes(query)) return true
+
+    const parts = store.part[msg.id]
+    if (parts) {
+      for (const part of parts) {
+        const p = part as any
+        if (p.type === "text" && p.text?.toLowerCase().includes(query)) return true
+        if (p.type === "reasoning" && p.text?.toLowerCase().includes(query)) return true
+        if (p.type === "file" && p.path?.toLowerCase().includes(query)) return true
+        if (p.type === "subtask" && (p.description?.toLowerCase().includes(query) || p.prompt?.toLowerCase().includes(query))) return true
+      }
+    }
+  }
+
+  return false
 }
 
 function homeSessionSearchKey(record: HomeSessionRecord) {
@@ -189,10 +219,47 @@ function HomeDesign() {
     }),
   )
   const records = createMemo(() => allRecords().slice(0, HOME_SESSION_LIMIT))
+  createEffect(() => {
+    const query = search().toLowerCase()
+    if (!query) return
+    const records = allRecords()
+    const ctx = focusedServerCtx()
+    const syncCtx = focusedSync()
+    if (!ctx) return
+
+    for (const record of records) {
+      const directory = record.session.directory
+      const sessionID = record.session.id
+      const [childStore, setChildStore] = syncCtx.child(directory, { bootstrap: false })
+
+      if (!childStore.message[sessionID]) {
+        void ctx.sdk.client.session
+          .messages({ directory, sessionID, limit: 100 })
+          .then((res: { data?: Array<{ info: { id: string }; parts: any[] }> }) => {
+            const items = (res.data ?? []).filter((x) => !!x?.info?.id)
+            const msgs = items.map((x) => x.info)
+            batch(() => {
+              setChildStore("message", sessionID, msgs as any)
+              for (const item of items) {
+                if (item.parts) {
+                  setChildStore("part", item.info.id, item.parts as any)
+                }
+              }
+            })
+          })
+          .catch(() => {})
+      }
+    }
+  })
+
   const searchResults = createMemo(() => {
     const query = search().toLowerCase()
     if (!query) return []
-    return allRecords().filter((record) => matchesHomeSessionSearch(record, query))
+    const syncCtx = focusedSync()
+    return allRecords().filter((record) => {
+      const [childStore] = syncCtx.child(record.session.directory, { bootstrap: false })
+      return matchesHomeSessionSearch(record, childStore, query)
+    })
   })
   const searchOpen = createMemo(() => state.searchFocused && search().length > 0)
   const groups = createMemo(() => groupSessions(records(), language))
@@ -983,15 +1050,22 @@ function HomeSessionSearchResultRow(props: {
         server={props.server}
         activeServer={props.activeServer}
       />
-      <div class="flex min-w-0 flex-1 items-center gap-1.5">
-        <span
-          class={`${HOME_SEARCH_RESULT_TITLE} ${props.record.projectName ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
-        >
-          {title()}
-        </span>
-        <Show when={props.record.projectName}>
-          <span class={HOME_SEARCH_RESULT_META}>{props.record.projectName}</span>
-        </Show>
+      <div class="flex min-w-0 flex-1 items-center justify-between gap-2">
+        <div class="flex min-w-0 flex-1 items-center gap-1.5">
+          <span
+            class={`${HOME_SEARCH_RESULT_TITLE} ${props.record.projectName ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
+          >
+            {title()}
+          </span>
+          <Show when={props.record.projectName}>
+            <span class={HOME_SEARCH_RESULT_META}>{props.record.projectName}</span>
+          </Show>
+        </div>
+        <SessionPendingRequestActions
+          sessionID={props.record.session.id}
+          directory={props.record.session.directory}
+          compact
+        />
       </div>
     </button>
   )
@@ -1032,25 +1106,32 @@ function HomeSessionRow(props: {
     <button
       type="button"
       data-component="home-session-row"
-      class={`${HOME_ROW} h-10 gap-2 px-6 py-3 pl-4`}
+      class={`${HOME_ROW} h-10 gap-2 px-6 py-3 pl-4 min-w-0 flex items-center justify-between`}
       onClick={() => props.openSession(props.record.session)}
     >
-      <HomeSessionLeading
-        project={props.record.project}
-        session={props.record.session}
-        server={props.server}
-        activeServer={props.activeServer}
-      />
-      <span
-        class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-base [font-weight:530] ${props.record.projectName ? "max-w-[min(70%,480px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
-      >
-        {title()}
-      </span>
-      <Show when={props.record.projectName}>
-        <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-muted [font-weight:440]">
-          {props.record.projectName}
+      <div class="flex min-w-0 flex-1 items-center gap-2">
+        <HomeSessionLeading
+          project={props.record.project}
+          session={props.record.session}
+          server={props.server}
+          activeServer={props.activeServer}
+        />
+        <span
+          class={`min-w-0 overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-base [font-weight:530] ${props.record.projectName ? "max-w-[min(60%,380px)] flex-[0_1_auto]" : "flex-[1_1_auto]"}`}
+        >
+          {title()}
         </span>
-      </Show>
+        <Show when={props.record.projectName}>
+          <span class="min-w-0 flex-[1_1_auto] overflow-hidden text-ellipsis whitespace-nowrap text-v2-text-text-muted [font-weight:440]">
+            {props.record.projectName}
+          </span>
+        </Show>
+      </div>
+
+      <SessionPendingRequestActions
+        sessionID={props.record.session.id}
+        directory={props.record.session.directory}
+      />
     </button>
   )
 }

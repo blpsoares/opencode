@@ -13,6 +13,8 @@ import {
   type State,
   type VcsCache,
 } from "./types"
+
+export type { ChildOptions, DirState, IconCache, MetaCache, ProjectMeta, State, VcsCache }
 import { canDisposeDirectory, pickDirectoriesToEvict } from "./eviction"
 import { useQuery } from "@tanstack/solid-query"
 import { QueryOptionsApi } from "../server-sync"

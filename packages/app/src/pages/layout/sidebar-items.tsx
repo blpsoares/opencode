@@ -16,6 +16,7 @@ import { messageAgentColor } from "@/utils/agent"
 import { sessionTitle } from "@/utils/session-title"
 import { sessionPermissionRequest } from "../session/composer/session-request-tree"
 import { childSessionOnPath, getProjectAvatarSource, hasProjectPermissions } from "./helpers"
+import { SessionPendingRequestActions } from "@/components/session-request-actions"
 
 export const ProjectIcon = (props: {
   project: LocalProject
@@ -104,39 +105,47 @@ const SessionRow = (props: {
   const title = () => sessionTitle(props.session.title)
 
   return (
-    <A
-      href={`/${props.slug}/session/${props.session.id}`}
-      class={`flex items-center gap-2 min-w-0 w-full text-left focus:outline-none ${props.dense ? "py-0.5" : "py-1"}`}
-      onPointerDown={props.warmPress}
-      onFocus={props.warmFocus}
-      onClick={() => {
-        if (props.sidebarOpened()) return
-        props.clearHoverProjectSoon()
-      }}
-    >
-      <Show when={props.isWorking() || props.hasPermissions() || props.hasError() || props.unseenCount() > 0}>
-        <div
-          class="shrink-0 size-6 flex items-center justify-center"
-          style={{ color: props.tint() ?? "var(--icon-interactive-base)" }}
-        >
-          <Switch>
-            <Match when={props.isWorking()}>
-              <Spinner class="size-[15px]" />
-            </Match>
-            <Match when={props.hasPermissions()}>
-              <div class="size-1.5 rounded-full bg-surface-warning-strong" />
-            </Match>
-            <Match when={props.hasError()}>
-              <div class="size-1.5 rounded-full bg-text-diff-delete-base" />
-            </Match>
-            <Match when={props.unseenCount() > 0}>
-              <div class="size-1.5 rounded-full bg-text-interactive-base" />
-            </Match>
-          </Switch>
-        </div>
-      </Show>
-      <span class="text-14-regular text-text-strong min-w-0 flex-1 truncate">{title()}</span>
-    </A>
+    <div class="flex items-center gap-1.5 min-w-0 w-full justify-between">
+      <A
+        href={`/${props.slug}/session/${props.session.id}`}
+        class={`flex items-center gap-2 min-w-0 flex-1 text-left focus:outline-none ${props.dense ? "py-0.5" : "py-1"}`}
+        onPointerDown={props.warmPress}
+        onFocus={props.warmFocus}
+        onClick={() => {
+          if (props.sidebarOpened()) return
+          props.clearHoverProjectSoon()
+        }}
+      >
+        <Show when={props.isWorking() || props.hasPermissions() || props.hasError() || props.unseenCount() > 0}>
+          <div
+            class="shrink-0 size-6 flex items-center justify-center"
+            style={{ color: props.tint() ?? "var(--icon-interactive-base)" }}
+          >
+            <Switch>
+              <Match when={props.isWorking()}>
+                <Spinner class="size-[15px]" />
+              </Match>
+              <Match when={props.hasPermissions()}>
+                <div class="size-1.5 rounded-full bg-surface-warning-strong" />
+              </Match>
+              <Match when={props.hasError()}>
+                <div class="size-1.5 rounded-full bg-text-diff-delete-base" />
+              </Match>
+              <Match when={props.unseenCount() > 0}>
+                <div class="size-1.5 rounded-full bg-text-interactive-base" />
+              </Match>
+            </Switch>
+          </div>
+        </Show>
+        <span class="text-14-regular text-text-strong min-w-0 flex-1 truncate">{title()}</span>
+      </A>
+
+      <SessionPendingRequestActions
+        sessionID={props.session.id}
+        directory={props.session.directory}
+        compact
+      />
+    </div>
   )
 }
 

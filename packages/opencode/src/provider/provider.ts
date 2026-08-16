@@ -179,17 +179,15 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
         return parsed.claudeAiOauth?.accessToken ?? null
       }).pipe(Effect.orElseSucceed(() => null))
       if (token) {
+        const port = yield* Effect.promise(async () => {
+          const { startClaudeCodeProxy } = await import("./claude-code-proxy")
+          return startClaudeCodeProxy()
+        })
         return {
           autoload: true,
           options: {
-            apiKey: "claude-code-oauth",
-            headers: betaHeaders,
-            fetch: async (input: unknown, init?: RequestInit) => {
-              const headers = new Headers((init?.headers as HeadersInit | undefined) ?? {})
-              headers.delete("x-api-key")
-              headers.set("authorization", `Bearer ${token}`)
-              return fetch(input as RequestInfo, { ...init, headers })
-            },
+            apiKey: "claude-code-proxy",
+            baseURL: `http://127.0.0.1:${port}/v1`,
           },
         }
       }

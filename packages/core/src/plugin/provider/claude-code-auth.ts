@@ -16,12 +16,14 @@ interface ClaudeCredentials {
 
 export const ClaudeCodeAuthPlugin = PluginV2.define({
   id: PluginV2.ID.make("claude-code-auth"),
-  effect: Effect.gen(function* () {
+  effect: Effect.fn("ClaudeCodeAuthPlugin.effect")(function* () {
     const fs = yield* FSUtil.Service
     const integrations = yield* Integration.Service
 
     const credentialsPath = path.join(os.homedir(), ".claude", ".credentials.json")
-    const content = yield* fs.readFileStringSafe(credentialsPath)
+    const content = yield* fs
+      .readFileStringSafe(credentialsPath)
+      .pipe(Effect.orElseSucceed(() => undefined))
     if (!content) return
 
     let creds: ClaudeCredentials
@@ -36,14 +38,16 @@ export const ClaudeCodeAuthPlugin = PluginV2.define({
 
     process.env[CLAUDE_CODE_OAUTH_ENV] = token
 
-    yield* integrations.update((editor) => {
-      editor.method.update({
-        integrationID: Integration.ID.make("anthropic"),
-        method: {
-          type: "env",
-          names: [CLAUDE_CODE_OAUTH_ENV],
-        },
+    yield* integrations
+      .update((editor) => {
+        editor.method.update({
+          integrationID: Integration.ID.make("anthropic"),
+          method: {
+            type: "env",
+            names: [CLAUDE_CODE_OAUTH_ENV],
+          },
+        })
       })
-    })
-  }),
+      .pipe(Effect.orElseSucceed(() => undefined))
+  })(),
 })

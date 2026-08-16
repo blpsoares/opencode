@@ -303,7 +303,10 @@ export function DialogSelectDirectoryV2(props: DialogSelectDirectoryV2Props) {
                     role="option"
                     aria-selected={index() === activeSuggestion()}
                     data-active={index() === activeSuggestion() ? "" : undefined}
-                    onPointerMove={() => setActiveSuggestion(index())}
+                    onPointerMove={(e) => {
+                      if (e.movementX === 0 && e.movementY === 0) return
+                      setActiveSuggestion(index())
+                    }}
                     onClick={() => chooseSuggestion(suggestion)}
                   >
                     {displayPickerPath(suggestion.absolute, input(), home())}
